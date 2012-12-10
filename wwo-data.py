@@ -3,7 +3,6 @@
 
 import contextlib
 import datetime
-#from datetime import datetime
 import logging
 import os
 import sys
@@ -14,17 +13,16 @@ except ImportError:
     sys.exit('Please install `requests` with `pip install requests`')
 
 SLEEP_TIME = 9
-API_KEY = os.environ.get('WUNDERGROUND_API_KEY')
+API_KEY = os.environ.get('WWO_API_KEY')
 if API_KEY is None:
-    sys.exit('Please set the `WUNDERGROUND_API_KEY` in your environment')
+    sys.exit('Please set the `WWO_API_KEY` in your environment')
 
-# Set the parameter for API request.
-# Refer to http://www.wunderground.com/weather/api/d/docs?d=data/index
-FEATURES = 'conditions/forecast'
-END_POINT = 'http://api.wunderground.com/api/%s/%s/q/%s.json' % (API_KEY, FEATURES, '%s')
+FORECAST_DAY = 5
+END_POINT = 'http://free.worldweatheronline.com/feed/weather.ashx?key=%s&q=%s&num_of_days=%s&format=json' % (API_KEY, '%s', FORECAST_DAY)
 
 DIR = os.path.dirname(os.path.abspath(__file__))
-logging.basicConfig(filename=(DIR + datetime.datetime.now().strftime('/wunderground-%Y-%m-%d-%H-%M.log')), level=logging.DEBUG)
+logging.basicConfig(filename=(DIR + datetime.datetime.now().strftime('/wwo-%Y-%m-%d-%H-%M.log')), level=logging.DEBUG)
+logging.debug('pwd: ' + DIR)
 
 # Load zipcodes.
 # For zipcode startwith `0`, can not use `int` to discard the `\r\n`.
@@ -33,22 +31,23 @@ with open(DIR + '/zipcode.txt') as f:
 zipcodes = zipcodes[:20]
 
 filename_suffix = datetime.datetime.now().strftime('%Y-%m-%d-%H-%M.dat')
-with contextlib.nested(open(DIR + '/wund-ob-' + filename_suffix, 'w'), open(DIR + '/wund-fc-' + filename_suffix, 'w')) as (f1, f2):
+with contextlib.nested(open(DIR + '/wwo-ob-' + filename_suffix, 'w'), open(DIR + '/wwo-fc-' + filename_suffix, 'w')) as (f1, f2):
     for zipcode in zipcodes:
         url = END_POINT % zipcode
         response = requests.get(url)
         if response.status_code == requests.codes.ok:
             try:
-                observation = response.json.get('current_observation')
-                f1.write('%s, %s, %s, %s\n' % (zipcode, observation.get('weather'), observation.get('temp_f'), observation.get('relative_humidity')))
-                forecast_list = response.json.get('forecast').get('simpleforecast').get('forecastday')
-                # 3 days forecast
+                observation = response.json.get('data').get('current_condition')[0]
+                f1.write('%s, %s, %s, %s\n' % (zipcode, observation.get('weatherDesc')[0].get('value'), observation.get('temp_F'), observation.get('humidity')))
+                forecast_list = response.json.get('data').get('weather')
+                # 3 days forecast weather.
+                # No humidity.
                 index = 0
                 for forecast in forecast_list:
                     # Discard the first forecast (today)
                     if index:
                         shifted_date = (datetime.timedelta(days=index) + datetime.datetime.now()).strftime('%Y-%m-%d')
-                        f2.write('%s, %s, %s, %s, %s, %s, %s\n' % (zipcode, index, shifted_date, forecast.get('high').get('fahrenheit'), forecast.get('low').get('fahrenheit'), forecast.get('avehumidity'), forecast.get('conditions')))
+                        f2.write('%s, %s, %s, %s, %s, %s\n' % (zipcode, index, shifted_date, forecast.get('tempMaxF'), forecast.get('tempMinF'), forecast.get('weatherDesc')[0].get('value')))
                     index += 1
             except:
                 logging.error(sys.exc_info()[:2])
