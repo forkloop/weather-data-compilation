@@ -1,42 +1,56 @@
 #!/usr/bin/env ruby
 
+# Prefer single quote when you don't need string interpolation.
+require 'rubygems'
 require 'date'
+require 'time'
+require 'logger'
+require 'aws-sdk'
+
+log = Logger.new(STDOUT)
+log.level = Logger::DEBUG
 
 DATA_DIR = File.expand_path('../data', __FILE__)
+log.debug(DATA_DIR)
 
-# enforce there is a `data` directory
+# Enforce there is a `data` directory.
 if !File.directory? DATA_DIR
-  abort(DATA_DIR + ' does not exist!')
+  abort("#{DATA_DIR} does not exist!")
 end
 
-# Get the timestamp latest file.
+# Get the timestamp of latest file.
 previous_data = Dir.entries(DATA_DIR)
 latest_timestamp = 0
 previous_data.each do |data|
+  log.debug("Checking #{data}")
   match_data = /\d{4}-\d{2}-\d{2}/.match(data)
   if !!match_data
-    timestamp = Date.parse(match_data.to_s).to_time.to_i
+    timestamp = Time.parse(Date.parse(match_data.to_s).to_s).to_i
     if timestamp > latest_timestamp
       latest_timestamp = timestamp
     end
   else
-    p 'Invalid file name: ' + data
+    log.debug("Ignore file: #{data}")
   end
 end
+log.info("Latest file date: #{Time.at(latest_timestamp).strftime('%Y-%m-%d')}")
 
 # Start to download.
-SECOND_PER_DAY = 24 * 3600
-today_timestamp = Date.today.to_time.to_i
-s3 = AWS::S3.new(ENV['AWS_ACCESS_KEY_ID'], ENV['AWS_SECRET_ACCESS_KEY'])
-BUCKET = s3.buckets.['weather-data-compilation']
+SECONDS_PER_DAY = 24 * 3600
+today_timestamp = Time.parse(Date.today.to_s).to_i
+s3 = AWS::S3.new(:access_key_id => ENV['AWS_ACCESS_KEY_ID'], 
+                 :secret_access_key => ENV['AWS_SECRET_ACCESS_KEY'])
+BUCKET = s3.buckets['weather-data-compilation']
+latest_timestamp += SECONDS_PER_DAY
 while latest_timestamp < today_timestamp do
-  latest_timestamp += SECOND_PER_DAY
   file_to_download = "weather-data-#{Time.at(latest_timestamp).strftime('%Y-%m-%d')}.tar.gz"
+  log.info("Downloading #{file_to_download}.")
   object = BUCKET.objects[file_to_download]
   File.open(File.join(DATA_DIR, file_to_download), 'w') do |f|
     object.read do |chunk|
       f.write(chunk)
     end
   end
-  p 'Downloaded ' + file_to_download
+  log.info("Downloaded #{file_to_download}.")
+  latest_timestamp += SECONDS_PER_DAY
 end
