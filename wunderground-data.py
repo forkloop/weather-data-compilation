@@ -20,7 +20,7 @@ if API_KEY is None:
 
 # Set the parameter for API request.
 # Refer to http://www.wunderground.com/weather/api/d/docs?d=data/index
-FEATURES = 'conditions/forecast'
+FEATURES = 'conditions/forecast10day'
 END_POINT = 'http://api.wunderground.com/api/%s/%s/q/%s.json' % (API_KEY, FEATURES, '%s')
 
 DIR = os.path.dirname(os.path.abspath(__file__))
@@ -30,7 +30,7 @@ logging.basicConfig(filename=(DIR + datetime.datetime.now().strftime('/wundergro
 # For zipcode startwith `0`, can not use `int` to discard the `\r\n`.
 with open(DIR + '/zipcode.txt') as f:
     zipcodes = [line[:5] for line in f]
-zipcodes = zipcodes[:20]
+#zipcodes = zipcodes[:20]
 
 filename_suffix = datetime.datetime.now().strftime('%Y-%m-%d-%H-%M.dat')
 with contextlib.nested(open(DIR + '/wund-ob-' + filename_suffix, 'w'), open(DIR + '/wund-fc-' + filename_suffix, 'w')) as (f1, f2):
@@ -39,9 +39,10 @@ with contextlib.nested(open(DIR + '/wund-ob-' + filename_suffix, 'w'), open(DIR 
         response = requests.get(url)
         if response.status_code == requests.codes.ok:
             try:
-                observation = response.json.get('current_observation')
+                observation = response.json().get('current_observation')
                 f1.write('%s, %s, %s, %s\n' % (zipcode, observation.get('weather'), observation.get('temp_f'), observation.get('relative_humidity')))
-                forecast_list = response.json.get('forecast').get('simpleforecast').get('forecastday')
+                f1.flush()
+                forecast_list = response.json().get('forecast').get('simpleforecast').get('forecastday')
                 # 3 days forecast
                 index = 0
                 for forecast in forecast_list:
@@ -49,6 +50,7 @@ with contextlib.nested(open(DIR + '/wund-ob-' + filename_suffix, 'w'), open(DIR 
                     if index:
                         shifted_date = (datetime.timedelta(days=index) + datetime.datetime.now()).strftime('%Y-%m-%d')
                         f2.write('%s, %s, %s, %s, %s, %s, %s\n' % (zipcode, index, shifted_date, forecast.get('high').get('fahrenheit'), forecast.get('low').get('fahrenheit'), forecast.get('avehumidity'), forecast.get('conditions')))
+                        f2.flush()
                     index += 1
             except:
                 logging.error(sys.exc_info()[:2])

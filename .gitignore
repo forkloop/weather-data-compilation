@@ -5,3 +5,6 @@ bin/
 data/
 *.pem
 *.vim
+*.dat
+*.txt
+*.gz
